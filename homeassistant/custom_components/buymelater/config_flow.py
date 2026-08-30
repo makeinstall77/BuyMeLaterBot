@@ -64,31 +64,50 @@ class BuyMeLaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
-        return BuyMeLaterOptionsFlow(config_entry)
+        return BuyMeLaterOptionsFlow()
 
 
 class BuyMeLaterOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    async def _get_ha_user_id(self) -> str:
+        if user_id := self.context.get("user_id"):
+            return str(user_id)
+        users = await self.hass.auth.async_get_users()
+        for user in users:
+            if user.is_owner:
+                return user.id
+        if users:
+            return users[0].id
+        return f"entry-{self.config_entry.entry_id}"
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        return await self.async_step_link()
+        return await self.async_step_link(user_input)
 
     async def async_step_link(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data={})
+
         session = async_get_clientsession(self.hass)
         client = BuyMeLaterApiClient(
             session,
             self.config_entry.data[CONF_URL],
             self.config_entry.data[CONF_API_TOKEN],
         )
-        ha_user_id = self.context.get("user_id") or ""
+        ha_user_id = await self._get_ha_user_id()
         try:
             result = await client.async_request_link_code(ha_user_id)
-        except BuyMeLaterApiError:
+        except BuyMeLaterApiError as err:
+            if str(err) == "invalid_auth":
+                return self.async_abort(reason="invalid_auth")
             return self.async_abort(reason="cannot_connect")
 
         code = result["code"]
+        command = f"/link {code}"
         return self.async_show_form(
             step_id="link",
-            description_placeholders={"code": code},
+            description_placeholders={"code": code, "command": command},
+            data_schema=vol.Schema(
+                {
+                    vol.Required("command", default=command): str,
+                }
+            ),
         )

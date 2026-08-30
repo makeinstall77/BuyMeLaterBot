@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from core.events import item_ws_payload, queue_ws_event
 from core.models import Item, ItemStatus, List, ListType, Scope, ScopeType, TelegramUser
 from core.recurrence import initial_next_notify, next_notify_after
 from core.schemas import ItemCreate, ItemUpdate
@@ -184,6 +185,10 @@ async def create_item(session: AsyncSession, list_id: UUID, data: ItemCreate) ->
     )
     session.add(item)
     await session.flush()
+    loaded = await get_item(session, item.id)
+    if loaded is not None:
+        queue_ws_event(session, "item_created", item_ws_payload(loaded))
+        return loaded
     return item
 
 
@@ -211,10 +216,21 @@ async def update_item(session: AsyncSession, item: Item, data: ItemUpdate) -> It
             item.next_notify_at = item.due_at
 
     await session.flush()
+    queue_ws_event(session, "item_updated", item_ws_payload(item))
     return item
 
 
 async def delete_item(session: AsyncSession, item: Item) -> None:
+    queue_ws_event(
+        session,
+        "item_deleted",
+        {
+            "id": str(item.id),
+            "list_id": str(item.list_id),
+            "list_type": item.list.list_type.value if item.list else None,
+            "scope_id": str(item.list.scope_id) if item.list else None,
+        },
+    )
     await session.delete(item)
 
 

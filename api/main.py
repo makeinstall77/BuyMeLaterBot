@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import verify_api_token
-from api.websocket import broadcast_item_event, ws_manager
+from api.websocket import ws_manager
 from core.config import settings
+from core.events import WS_EVENTS_KEY
 from core.crud import (
     create_item,
     delete_item,
@@ -32,6 +33,13 @@ from core.schemas import (
 )
 
 app = FastAPI(title="BuyMeLaterBot", version="0.1.0")
+
+
+async def _flush_ws(session: AsyncSession) -> None:
+    events = list(session.info.get(WS_EVENTS_KEY, []))
+    session.info[WS_EVENTS_KEY] = []
+    for event_name, payload in events:
+        await ws_manager.broadcast(event_name, payload)
 
 
 @app.get("/health")
@@ -84,9 +92,8 @@ async def api_create_item(
         raise HTTPException(status_code=404, detail="List not found")
     item = await create_item(session, list_id, payload)
     await session.commit()
+    await _flush_ws(session)
     item = await get_item(session, item.id)
-    if item is not None:
-        await broadcast_item_event("item_created", item)
     return ItemRead.model_validate(item)
 
 
@@ -101,9 +108,8 @@ async def api_update_item(
         raise HTTPException(status_code=404, detail="Item not found")
     item = await update_item(session, item, payload)
     await session.commit()
+    await _flush_ws(session)
     item = await get_item(session, item_id)
-    if item is not None:
-        await broadcast_item_event("item_updated", item)
     return ItemRead.model_validate(item)
 
 
@@ -115,15 +121,9 @@ async def api_delete_item(
     item = await get_item(session, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    list_type = item.list.list_type.value
-    scope_id = str(item.list.scope_id)
-    item_id = item.id
     await delete_item(session, item)
     await session.commit()
-    await ws_manager.broadcast(
-        "item_deleted",
-        {"id": str(item_id), "list_type": list_type, "scope_id": scope_id},
-    )
+    await _flush_ws(session)
 
 
 @router.post("/link/request", response_model=LinkRequestRead)

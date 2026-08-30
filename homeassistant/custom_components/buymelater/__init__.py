@@ -60,10 +60,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "client_session": session,
     }
 
+    from .websocket_api import async_setup_ws
     from .ws_listener import async_start_ws_listener
 
+    if not hass.data[DOMAIN].get("ws_registered"):
+        async_setup_ws(hass)
+        hass.data[DOMAIN]["ws_registered"] = True
     stop_listener = async_start_ws_listener(hass, entry.entry_id)
     hass.data[DOMAIN][entry.entry_id]["stop_listener"] = stop_listener
+
+    async def _refresh_on_event(_event) -> None:
+        await coordinator.async_request_refresh()
+
+    hass.data[DOMAIN][entry.entry_id]["unsub_bus"] = hass.bus.async_listen(
+        "buymelater_event", _refresh_on_event
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await _register_panel(hass)
@@ -72,8 +83,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry_data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-    if entry_data and (stop := entry_data.get("stop_listener")):
-        stop()
+    if entry_data:
+        if stop := entry_data.get("stop_listener"):
+            stop()
+        if unsub := entry_data.get("unsub_bus"):
+            unsub()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
 
@@ -96,12 +110,19 @@ async def _register_panel(hass: HomeAssistant) -> None:
     await hass.http.async_register_static_paths(
         [StaticPathConfig("/buymelater-panel", str(frontend_dir), False)]
     )
-    panel_custom.async_register_panel(
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        add_extra_js_url(hass, "/buymelater-panel/buymelater-card.js?v=0.1.1")
+    except Exception:
+        pass
+    await panel_custom.async_register_panel(
         hass,
         frontend_url_path="buymelater",
-        module_url="/buymelater-panel/buymelater-panel.js",
-        panel_icon="mdi:cart-check",
-        panel_title="BuyMeLater",
+        webcomponent_name="buymelater-panel",
+        sidebar_title="BuyMeLater",
+        sidebar_icon="mdi:cart-check",
+        module_url="/buymelater-panel/buymelater-panel.js?v=0.1.1",
         require_admin=False,
     )
     hass.data.setdefault(DOMAIN, {})["panel_registered"] = True

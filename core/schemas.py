@@ -107,6 +107,8 @@ class LinkRequestRead(BaseModel):
 
 
 class LinkedUserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     telegram_user_id: int
     username: str | None
