@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.inline import settings_kb
+from bot.ui import show_screen
 from core.crud import update_scope_timezone, update_user_timezone
 from core.models import Scope, TelegramUser
 
@@ -36,9 +37,11 @@ def _settings_text(db_user: TelegramUser, scope: Scope) -> str:
 
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, db_user: TelegramUser, scope: Scope) -> None:
-    await message.answer(
+    await show_screen(
+        message,
         _settings_text(db_user, scope),
-        reply_markup=settings_kb(db_user.timezone),
+        settings_kb(db_user.timezone),
+        delete_user=True,
     )
 
 
@@ -55,8 +58,9 @@ async def cb_settings_tz(
         await update_scope_timezone(session, scope, timezone)
 
     label = TIMEZONE_LABELS.get(timezone, timezone)
-    await callback.message.edit_text(
+    await show_screen(
+        callback,
         f"✅ Часовой пояс: {label}\n\n{_settings_text(db_user, scope)}",
-        reply_markup=settings_kb(timezone),
+        settings_kb(timezone),
     )
     await callback.answer()

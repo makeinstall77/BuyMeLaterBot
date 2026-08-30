@@ -4,7 +4,9 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.inline import main_menu_kb
-from bot.views import render_list_message
+from bot.state import clear_add_wizard
+from bot.ui import show_screen
+from bot.views import open_list_screen
 from core.models import ListType, Scope
 
 router = Router(name="commands")
@@ -27,28 +29,40 @@ HELP_TEXT = (
 
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
-    await message.answer(HELP_TEXT, reply_markup=main_menu_kb())
+    if message.from_user:
+        clear_add_wizard(message.from_user.id)
+    await show_screen(message, HELP_TEXT, main_menu_kb(), delete_user=True)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(HELP_TEXT, reply_markup=main_menu_kb())
+    if message.from_user:
+        clear_add_wizard(message.from_user.id)
+    await show_screen(message, HELP_TEXT, main_menu_kb(), delete_user=True)
 
 
 @router.message(Command("lists"))
 async def cmd_lists(message: Message) -> None:
-    await message.answer("Выберите список:", reply_markup=main_menu_kb())
+    if message.from_user:
+        clear_add_wizard(message.from_user.id)
+    await show_screen(message, "Выберите список:", main_menu_kb(), delete_user=True)
 
 
 @router.message(Command("shopping"))
 async def cmd_shopping(
     message: Message, session: AsyncSession, scope: Scope
 ) -> None:
-    text, kb = await render_list_message(session, scope, ListType.shopping)
-    await message.answer(text, reply_markup=kb)
+    if message.from_user:
+        clear_add_wizard(message.from_user.id)
+    text, kb = await open_list_screen(
+        session, scope, ListType.shopping, message.from_user.id
+    )
+    await show_screen(message, text, kb, delete_user=True)
 
 
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message, session: AsyncSession, scope: Scope) -> None:
-    text, kb = await render_list_message(session, scope, ListType.tasks)
-    await message.answer(text, reply_markup=kb)
+    if message.from_user:
+        clear_add_wizard(message.from_user.id)
+    text, kb = await open_list_screen(session, scope, ListType.tasks, message.from_user.id)
+    await show_screen(message, text, kb, delete_user=True)

@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.snooze import snooze_until
+from bot.ui import show_screen
 from bot.views import format_item_card
 from core.crud import get_item, update_item
 from core.models import Scope
@@ -42,7 +43,8 @@ async def cb_item_snooze(callback: CallbackQuery, session: AsyncSession, scope: 
     label = SNOOZE_LABELS.get(preset, preset)
     list_type = item.list.list_type
     text = format_item_card(item, list_type, scope.timezone)
-    await callback.message.edit_text(
+    await show_screen(
+        callback,
         f"⏰ Напоминание отложено до {format_due(until, scope.timezone)} ({label})\n\n{text}",
     )
     await callback.answer("Отложено")
