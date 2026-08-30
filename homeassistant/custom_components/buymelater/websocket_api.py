@@ -33,6 +33,37 @@ def _serialize_list(coordinator: BuyMeLaterCoordinator, lst) -> dict[str, Any]:
     }
 
 
+def _patch_item(coordinator: BuyMeLaterCoordinator, item: dict[str, Any]) -> None:
+    if coordinator.data is None:
+        coordinator.data = {}
+    list_id = str(item.get("list_id") or "")
+    if not list_id:
+        return
+    items = list(coordinator.data.get(list_id, []))
+    iid = str(item.get("id"))
+    replaced = False
+    for idx, existing in enumerate(items):
+        if str(existing.get("id")) == iid:
+            items[idx] = item
+            replaced = True
+            break
+    if not replaced:
+        items.append(item)
+    coordinator.data[list_id] = items
+
+
+def _remove_item(coordinator: BuyMeLaterCoordinator, item_id: str) -> None:
+    if not coordinator.data:
+        return
+    iid = str(item_id)
+    for list_id, items in list(coordinator.data.items()):
+        coordinator.data[list_id] = [item for item in items if str(item.get("id")) != iid]
+
+
+def _notify_ui(hass: HomeAssistant, payload: dict[str, Any]) -> None:
+    hass.bus.async_fire("buymelater_event", payload)
+
+
 @callback
 def async_setup_ws(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_overview)
@@ -62,6 +93,8 @@ async def ws_overview(
         vol.Required("title"): str,
         vol.Optional("due_at"): vol.Any(str, None),
         vol.Optional("notifications_enabled", default=False): bool,
+        vol.Optional("is_recurring"): bool,
+        vol.Optional("rrule"): vol.Any(str, None),
     }
 )
 @websocket_api.async_response
@@ -81,9 +114,15 @@ async def ws_create_item(
     if msg.get("due_at"):
         payload["due_at"] = msg["due_at"]
         payload["notifications_enabled"] = True
+    if "is_recurring" in msg:
+        payload["is_recurring"] = msg["is_recurring"]
+    if "rrule" in msg:
+        payload["rrule"] = msg["rrule"]
     item = await coordinator.client.async_create_item(lst.list_id, payload)
-    await coordinator.async_request_refresh()
+    _patch_item(coordinator, item)
+    _notify_ui(hass, {"event": "item_created", **item})
     connection.send_result(msg["id"], item)
+    hass.async_create_task(coordinator.async_refresh())
 
 
 @websocket_api.websocket_command(
@@ -94,6 +133,8 @@ async def ws_create_item(
         vol.Optional("status"): str,
         vol.Optional("due_at"): vol.Any(str, None),
         vol.Optional("notifications_enabled"): bool,
+        vol.Optional("is_recurring"): bool,
+        vol.Optional("rrule"): vol.Any(str, None),
     }
 )
 @websocket_api.async_response
@@ -108,12 +149,14 @@ async def ws_update_item(
         return
     payload = {
         key: msg[key]
-        for key in ("title", "status", "due_at", "notifications_enabled")
+        for key in ("title", "status", "due_at", "notifications_enabled", "is_recurring", "rrule")
         if key in msg
     }
     item = await coordinator.client.async_update_item(msg["item_id"], payload)
-    await coordinator.async_request_refresh()
+    _patch_item(coordinator, item)
+    _notify_ui(hass, {"event": "item_updated", **item})
     connection.send_result(msg["id"], item)
+    hass.async_create_task(coordinator.async_refresh())
 
 
 @websocket_api.websocket_command(
@@ -133,8 +176,10 @@ async def ws_delete_item(
         connection.send_error(msg["id"], "not_found", "Item not found")
         return
     await coordinator.client.async_delete_item(msg["item_id"])
-    await coordinator.async_request_refresh()
+    _remove_item(coordinator, msg["item_id"])
+    _notify_ui(hass, {"event": "item_deleted", "id": msg["item_id"]})
     connection.send_result(msg["id"])
+    hass.async_create_task(coordinator.async_refresh())
 
 
 def _find_list(hass: HomeAssistant, list_id: str):

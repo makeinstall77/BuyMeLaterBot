@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -48,13 +49,13 @@ class BuyMeLaterCoordinator(DataUpdateCoordinator[dict[str, list[dict[str, Any]]
     async def _async_update_data(self) -> dict[str, list[dict[str, Any]]]:
         try:
             self.linked_users = await self.client.async_get_linked_users()
-        except BuyMeLaterApiError as err:
+        except (BuyMeLaterApiError, TimeoutError, aiohttp.ClientError) as err:
             raise UpdateFailed(str(err)) from err
 
         data: dict[str, list[dict[str, Any]]] = {}
         for lst in self.lists:
             try:
                 data[lst.list_id] = await self.client.async_get_items(lst.list_id)
-            except BuyMeLaterApiError as err:
+            except (BuyMeLaterApiError, TimeoutError, aiohttp.ClientError) as err:
                 raise UpdateFailed(str(err)) from err
         return data

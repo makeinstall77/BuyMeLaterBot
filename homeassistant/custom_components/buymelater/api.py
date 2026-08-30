@@ -6,6 +6,8 @@ from typing import Any
 
 import aiohttp
 
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10, sock_connect=5)
+
 
 class BuyMeLaterApiError(Exception):
     """API request failed."""
@@ -19,6 +21,7 @@ class BuyMeLaterApiClient:
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         url = f"{self._base_url}{path}"
+        kwargs.setdefault("timeout", REQUEST_TIMEOUT)
         async with self._session.request(method, url, headers=self._headers, **kwargs) as resp:
             if resp.status == 401:
                 raise BuyMeLaterApiError("invalid_auth")
@@ -31,7 +34,7 @@ class BuyMeLaterApiClient:
 
     async def async_get_health(self) -> dict[str, str]:
         root = self._base_url.split("/api/v1")[0] if "/api/v1" in self._base_url else self._base_url
-        async with self._session.get(f"{root}/health") as resp:
+        async with self._session.get(f"{root}/health", timeout=REQUEST_TIMEOUT) as resp:
             if resp.status >= 400:
                 raise BuyMeLaterApiError("cannot_connect")
             return await resp.json()
