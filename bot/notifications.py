@@ -18,6 +18,16 @@ async def send_item_notification(
             [
                 InlineKeyboardButton(text="✅ Готово", callback_data=f"item:done:{item.id}"),
             ],
+            [
+                InlineKeyboardButton(text="⏰ +1ч", callback_data=f"item:snooze:{item.id}:plus1h"),
+                InlineKeyboardButton(text="⏰ +3ч", callback_data=f"item:snooze:{item.id}:plus3h"),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⏰ Завтра 09:00",
+                    callback_data=f"item:snooze:{item.id}:tomorrow09",
+                ),
+            ],
         ]
     )
     await bot.send_message(scope.telegram_chat_id, text, reply_markup=kb)

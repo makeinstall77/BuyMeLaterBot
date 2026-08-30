@@ -45,7 +45,22 @@ docker compose exec app alembic upgrade head
 - `напомни купить хлеб в 17:00`
 - `напомни записаться к стоматологу 01.09.2026 в 09:00`
 
-Команды: `/start`, `/shopping`, `/tasks`, `/lists`, `/help`
+Команды: `/start`, `/shopping`, `/tasks`, `/lists`, `/settings`, `/link`, `/help`
+
+## Home Assistant
+
+Скопировать `homeassistant/custom_components/buymelater/` в `/config/custom_components/buymelater/`, перезагрузить HA и добавить интеграцию.
+
+- Сайдбар **BuyMeLater** — вкладки Покупки/Дела, фильтр Мои/Групповые, CRUD
+- Lovelace-карточка:
+
+```yaml
+type: custom:buymelater-card
+title: Покупки
+list_type: shopping
+```
+
+Опции: `list_id`, `entity` (todo.*), `list_type: shopping|tasks`. Если ничего не задано — все списки.
 
 ## Тесты
 

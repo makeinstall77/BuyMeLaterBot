@@ -1,4 +1,5 @@
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from core.crud import get_or_create_scope, get_or_create_user
 from core.db import async_session_factory
+from core.events import WS_EVENTS_KEY
 
 
 def _extract_chat_user(event: TelegramObject) -> tuple[Any, Any] | tuple[None, None]:
@@ -28,11 +30,17 @@ class DbSessionMiddleware(BaseMiddleware):
             data["session"] = session
             try:
                 result = await handler(event, data)
+                events = list(session.info.get(WS_EVENTS_KEY, []))
                 await session.commit()
-                return result
             except Exception:
                 await session.rollback()
                 raise
+            if events:
+                from api.websocket import ws_manager
+
+                for event_name, payload in events:
+                    await ws_manager.broadcast(event_name, payload)
+            return result
 
 
 class ScopeMiddleware(BaseMiddleware):

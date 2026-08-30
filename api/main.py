@@ -1,9 +1,19 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import verify_api_token
+from api.websocket import ws_manager
+from core.config import settings
 from core.crud import (
     create_item,
     delete_item,
@@ -11,14 +21,33 @@ from core.crud import (
     get_list,
     get_lists_for_scope,
     list_items,
+    list_linked_users,
     list_scopes,
     update_item,
 )
 from core.db import get_session
+from core.events import WS_EVENTS_KEY
+from core.link import create_link_code
 from core.models import ItemStatus, ScopeType
-from core.schemas import ItemCreate, ItemRead, ItemUpdate, ListRead, ScopeRead
+from core.schemas import (
+    ItemCreate,
+    ItemRead,
+    ItemUpdate,
+    LinkedUserRead,
+    LinkRequestCreate,
+    LinkRequestRead,
+    ListRead,
+    ScopeRead,
+)
 
 app = FastAPI(title="BuyMeLaterBot", version="0.1.0")
+
+
+async def _flush_ws(session: AsyncSession) -> None:
+    events = list(session.info.get(WS_EVENTS_KEY, []))
+    session.info[WS_EVENTS_KEY] = []
+    for event_name, payload in events:
+        await ws_manager.broadcast(event_name, payload)
 
 
 @app.get("/health")
@@ -71,6 +100,8 @@ async def api_create_item(
         raise HTTPException(status_code=404, detail="List not found")
     item = await create_item(session, list_id, payload)
     await session.commit()
+    await _flush_ws(session)
+    item = await get_item(session, item.id)
     return ItemRead.model_validate(item)
 
 
@@ -85,6 +116,8 @@ async def api_update_item(
         raise HTTPException(status_code=404, detail="Item not found")
     item = await update_item(session, item, payload)
     await session.commit()
+    await _flush_ws(session)
+    item = await get_item(session, item_id)
     return ItemRead.model_validate(item)
 
 
@@ -98,6 +131,37 @@ async def api_delete_item(
         raise HTTPException(status_code=404, detail="Item not found")
     await delete_item(session, item)
     await session.commit()
+    await _flush_ws(session)
+
+
+@router.post("/link/request", response_model=LinkRequestRead)
+async def api_link_request(payload: LinkRequestCreate) -> LinkRequestRead:
+    from datetime import UTC, datetime
+
+    req = create_link_code(payload.ha_user_id)
+    ttl = max(1, int((req.expires_at - datetime.now(UTC)).total_seconds()))
+    return LinkRequestRead(code=req.code, expires_in=ttl)
+
+
+@router.get("/users/linked", response_model=list[LinkedUserRead])
+async def api_linked_users(
+    session: AsyncSession = Depends(get_session),
+) -> list[LinkedUserRead]:
+    users = await list_linked_users(session)
+    return [LinkedUserRead.model_validate(u) for u in users]
+
+
+@app.websocket("/ws")
+async def websocket_events(websocket: WebSocket, token: str = Query(...)) -> None:
+    if token != settings.api_token:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
 
 
 app.include_router(router)

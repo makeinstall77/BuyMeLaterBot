@@ -1,4 +1,4 @@
-from yargy import Parser, rule, or_
+from yargy import Parser, or_, rule
 from yargy.interpretation import fact
 from yargy.pipelines import morph_pipeline
 from yargy.predicates import caseless

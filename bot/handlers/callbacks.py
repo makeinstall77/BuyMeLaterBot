@@ -4,23 +4,23 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.inline import back_to_list_kb, item_actions_kb, list_type_kb, main_menu_kb
+from bot.keyboards.inline import item_actions_kb, list_type_kb, main_menu_kb
+from bot.state import pop_pending_parsed, store_pending_parsed
 from bot.views import format_item_card, render_list_message
 from core.crud import complete_item, delete_item, get_item, get_list_by_type, update_item
 from core.models import ListType, Scope, TelegramUser
+from core.recurrence import initial_next_notify
 from core.schemas import ItemUpdate
 
 router = Router(name="callbacks")
 
-_pending_parsed: dict[int, dict] = {}
-
 
 def store_pending(user_id: int, data: dict) -> None:
-    _pending_parsed[user_id] = data
+    store_pending_parsed(user_id, data)
 
 
 def pop_pending(user_id: int) -> dict | None:
-    return _pending_parsed.pop(user_id, None)
+    return pop_pending_parsed(user_id)
 
 
 @router.callback_query(F.data == "menu:home")
@@ -113,14 +113,20 @@ async def cb_item_notify(callback: CallbackQuery, session: AsyncSession, scope: 
         return
     new_state = not item.notifications_enabled
     if new_state and item.due_at is None:
-        await callback.answer("Сначала укажите дату в тексте сообщения", show_alert=True)
+        await callback.answer("Сначала укажите дату (кнопка «📅 Дата»)", show_alert=True)
         return
+    next_at = None
+    if new_state and item.due_at:
+        if item.is_recurring and item.rrule:
+            next_at = initial_next_notify(item.due_at, item.rrule)
+        else:
+            next_at = item.due_at
     await update_item(
         session,
         item,
         ItemUpdate(
             notifications_enabled=new_state,
-            next_notify_at=item.due_at if new_state else None,
+            next_notify_at=next_at,
         ),
     )
     list_type = item.list.list_type
