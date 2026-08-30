@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.models import Item, ItemStatus, List, ListType, Scope, ScopeType, TelegramUser
+from core.recurrence import initial_next_notify, next_notify_after
 from core.schemas import ItemCreate, ItemUpdate
 
 
@@ -29,6 +30,18 @@ async def get_or_create_user(session: AsyncSession, user: User, timezone: str) -
         db_user.username = user.username
         db_user.display_name = display_name
     return db_user
+
+
+async def update_user_timezone(session: AsyncSession, user: TelegramUser, timezone: str) -> TelegramUser:
+    user.timezone = timezone
+    await session.flush()
+    return user
+
+
+async def update_scope_timezone(session: AsyncSession, scope: Scope, timezone: str) -> Scope:
+    scope.timezone = timezone
+    await session.flush()
+    return scope
 
 
 async def _create_default_lists(session: AsyncSession, scope: Scope) -> None:
@@ -130,7 +143,12 @@ async def get_item(session: AsyncSession, item_id: UUID) -> Item | None:
 
 
 async def create_item(session: AsyncSession, list_id: UUID, data: ItemCreate) -> Item:
-    next_notify_at = data.due_at if data.notifications_enabled and data.due_at else None
+    next_notify_at = None
+    if data.notifications_enabled and data.due_at:
+        if data.is_recurring and data.rrule:
+            next_notify_at = initial_next_notify(data.due_at, data.rrule)
+        else:
+            next_notify_at = data.due_at
     item = Item(
         list_id=list_id,
         title=data.title.strip(),
@@ -164,6 +182,12 @@ async def update_item(session: AsyncSession, item: Item, data: ItemUpdate) -> It
     elif data.notifications_enabled and item.due_at:
         item.next_notify_at = item.due_at
 
+    if "due_at" in fields and data.notifications_enabled is None:
+        if item.due_at is None:
+            item.next_notify_at = None
+        elif item.notifications_enabled:
+            item.next_notify_at = item.due_at
+
     await session.flush()
     return item
 
@@ -196,7 +220,15 @@ async def get_due_notifications(session: AsyncSession, now: datetime) -> list[It
 
 async def mark_notified(session: AsyncSession, item: Item, *, now: datetime) -> Item:
     item.last_notified_at = now
-    item.notifications_enabled = False
-    item.next_notify_at = None
+    if item.is_recurring and item.rrule and item.due_at:
+        nxt = next_notify_after(item.rrule, item.due_at, now)
+        if nxt is None:
+            item.notifications_enabled = False
+            item.next_notify_at = None
+        else:
+            item.next_notify_at = nxt
+    else:
+        item.notifications_enabled = False
+        item.next_notify_at = None
     await session.flush()
     return item

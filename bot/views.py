@@ -1,10 +1,9 @@
-from uuid import UUID
-
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models import Item, ListType, Scope
 from core.nlp.datetime_extract import format_due
+from core.recurrence import format_recurrence
 
 
 async def render_list_message(
@@ -34,7 +33,8 @@ async def render_list_message(
     for item in items[:20]:
         due = format_due(item.due_at, scope.timezone)
         notify = "🔔" if item.notifications_enabled else ""
-        lines.append(f"• {item.title} {notify}\n  📅 {due}")
+        recur = " 🔁" if item.is_recurring else ""
+        lines.append(f"• {item.title}{recur} {notify}\n  📅 {due}")
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -50,7 +50,7 @@ async def render_list_message(
 def format_item_card(item: Item, list_type: ListType, timezone: str) -> str:
     due = format_due(item.due_at, timezone)
     notify = "вкл" if item.notifications_enabled else "выкл"
-    recurring = "да" if item.is_recurring else "нет"
+    recurring = format_recurrence(item, timezone)
     return (
         f"{'🛒' if list_type == ListType.shopping else '📋'} {item.title}\n"
         f"📅 {due} | 🔔 {notify} | 🔁 {recurring}"

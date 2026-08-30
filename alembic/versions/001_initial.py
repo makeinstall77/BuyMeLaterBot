@@ -16,9 +16,9 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-scope_type = postgresql.ENUM("personal", "group", name="scope_type", create_type=True)
-list_type = postgresql.ENUM("shopping", "tasks", name="list_type", create_type=True)
-item_status = postgresql.ENUM("active", "completed", "cancelled", name="item_status", create_type=True)
+scope_type = postgresql.ENUM("personal", "group", name="scope_type", create_type=False)
+list_type = postgresql.ENUM("shopping", "tasks", name="list_type", create_type=False)
+item_status = postgresql.ENUM("active", "completed", "cancelled", name="item_status", create_type=False)
 
 
 def upgrade() -> None:
