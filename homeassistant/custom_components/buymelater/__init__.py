@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
+from homeassistant.core import CoreState, Event, HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import BuyMeLaterApiClient
+from .api import BuyMeLaterApiClient, BuyMeLaterApiError
 from .const import CONF_API_TOKEN, CONF_URL, DATA_COORDINATOR, DOMAIN
 from .coordinator import BuyMeLaterCoordinator, BuyMeLaterList
 
 PLATFORMS = [Platform.TODO]
+FRONTEND_VERSION = "0.1.5"
 
 
 async def _discover_lists(client: BuyMeLaterApiClient) -> list[BuyMeLaterList]:
@@ -48,7 +51,11 @@ async def _discover_lists(client: BuyMeLaterApiClient) -> list[BuyMeLaterList]:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     client = BuyMeLaterApiClient(session, entry.data[CONF_URL], entry.data[CONF_API_TOKEN])
-    lists = await _discover_lists(client)
+    try:
+        lists = await _discover_lists(client)
+    except (BuyMeLaterApiError, aiohttp.ClientError, TimeoutError) as err:
+        raise ConfigEntryNotReady(str(err)) from err
+
     coordinator = BuyMeLaterCoordinator(hass, client, lists)
     await coordinator.async_config_entry_first_refresh()
 
@@ -57,7 +64,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DATA_COORDINATOR: coordinator,
         "client": client,
         "entry": entry,
-        "client_session": session,
     }
 
     from .websocket_api import async_setup_ws
@@ -69,15 +75,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     stop_listener = async_start_ws_listener(hass, entry.entry_id)
     hass.data[DOMAIN][entry.entry_id]["stop_listener"] = stop_listener
 
-    async def _refresh_on_event(_event) -> None:
-        await coordinator.async_request_refresh()
+    @callback
+    def _refresh_on_event(_event: Event) -> None:
+        hass.async_create_task(coordinator.async_request_refresh())
 
     hass.data[DOMAIN][entry.entry_id]["unsub_bus"] = hass.bus.async_listen(
         "buymelater_event", _refresh_on_event
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    await _register_panel(hass)
+    _schedule_panel(hass)
     return True
 
 
@@ -97,6 +104,20 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await async_setup_entry(hass, entry)
 
 
+def _schedule_panel(hass: HomeAssistant) -> None:
+    if hass.data.get(DOMAIN, {}).get("panel_scheduled"):
+        return
+    hass.data.setdefault(DOMAIN, {})["panel_scheduled"] = True
+
+    async def _run(_event: Event | None = None) -> None:
+        await _register_panel(hass)
+
+    if hass.state is CoreState.running:
+        hass.async_create_task(_run())
+        return
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _run)
+
+
 async def _register_panel(hass: HomeAssistant) -> None:
     if hass.data.get(DOMAIN, {}).get("panel_registered"):
         return
@@ -113,7 +134,7 @@ async def _register_panel(hass: HomeAssistant) -> None:
     try:
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, "/buymelater-panel/buymelater-card.js?v=0.1.1")
+        add_extra_js_url(hass, f"/buymelater-panel/buymelater-card.js?v={FRONTEND_VERSION}")
     except Exception:
         pass
     await panel_custom.async_register_panel(
@@ -122,7 +143,7 @@ async def _register_panel(hass: HomeAssistant) -> None:
         webcomponent_name="buymelater-panel",
         sidebar_title="BuyMeLater",
         sidebar_icon="mdi:cart-check",
-        module_url="/buymelater-panel/buymelater-panel.js?v=0.1.1",
+        module_url=f"/buymelater-panel/buymelater-panel.js?v={FRONTEND_VERSION}",
         require_admin=False,
     )
     hass.data.setdefault(DOMAIN, {})["panel_registered"] = True

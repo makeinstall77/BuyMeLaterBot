@@ -22,7 +22,9 @@ from .coordinator import BuyMeLaterCoordinator, BuyMeLaterList
 
 def _item_description(item: dict[str, Any]) -> str | None:
     parts: list[str] = []
-    if item.get("is_recurring") and item.get("rrule"):
+    if item.get("recurrence_label"):
+        parts.append(f"🔁 {item['recurrence_label']}")
+    elif item.get("is_recurring") and item.get("rrule"):
         parts.append(f"🔁 {item['rrule']}")
     if item.get("notifications_enabled"):
         parts.append("🔔 уведомления вкл")
