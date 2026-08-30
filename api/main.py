@@ -1,9 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import verify_api_token
+from api.websocket import broadcast_item_event, ws_manager
+from core.config import settings
 from core.crud import (
     create_item,
     delete_item,
@@ -82,6 +84,9 @@ async def api_create_item(
         raise HTTPException(status_code=404, detail="List not found")
     item = await create_item(session, list_id, payload)
     await session.commit()
+    item = await get_item(session, item.id)
+    if item is not None:
+        await broadcast_item_event("item_created", item)
     return ItemRead.model_validate(item)
 
 
@@ -96,6 +101,9 @@ async def api_update_item(
         raise HTTPException(status_code=404, detail="Item not found")
     item = await update_item(session, item, payload)
     await session.commit()
+    item = await get_item(session, item_id)
+    if item is not None:
+        await broadcast_item_event("item_updated", item)
     return ItemRead.model_validate(item)
 
 
@@ -107,8 +115,15 @@ async def api_delete_item(
     item = await get_item(session, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
+    list_type = item.list.list_type.value
+    scope_id = str(item.list.scope_id)
+    item_id = item.id
     await delete_item(session, item)
     await session.commit()
+    await ws_manager.broadcast(
+        "item_deleted",
+        {"id": str(item_id), "list_type": list_type, "scope_id": scope_id},
+    )
 
 
 @router.post("/link/request", response_model=LinkRequestRead)
@@ -126,6 +141,19 @@ async def api_linked_users(
 ) -> list[LinkedUserRead]:
     users = await list_linked_users(session)
     return [LinkedUserRead.model_validate(u) for u in users]
+
+
+@app.websocket("/ws")
+async def websocket_events(websocket: WebSocket, token: str = Query(...)) -> None:
+    if token != settings.api_token:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
 
 
 app.include_router(router)
