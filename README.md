@@ -5,17 +5,9 @@ Telegram-бот для семейных списков покупок и дел 
 ## Стек
 
 - Python 3.12, aiogram 3, FastAPI, SQLAlchemy 2 async
-- PostgreSQL (`pg.sweethome.local`, БД `buymelater`)
+- PostgreSQL
 - Yargy + dateparser для русскоязычных напоминаний
 - APScheduler для уведомлений
-
-## Инфраструктура
-
-| Сервис | Адрес |
-|--------|-------|
-| Bot LXC | `172.16.10.160:8080` |
-| PostgreSQL | `pg.sweethome.local` (`172.16.10.150:5432`) |
-| Home Assistant | `https://makeinstall.duckdns.org` |
 
 ## Быстрый старт (dev)
 
@@ -31,7 +23,7 @@ alembic upgrade head
 python main.py
 ```
 
-## Docker (LXC 172.16.10.160)
+## Docker
 
 ```bash
 cd deploy

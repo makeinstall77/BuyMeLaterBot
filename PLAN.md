@@ -4,29 +4,29 @@
 
 Telegram-бот для семейных списков (покупки + дела) с периодическими/разовыми напоминаниями и кастомной интеграцией Home Assistant (HACS): `todo`-сущности + панель в левом сайдбаре.
 
-**Источник истины:** PostgreSQL на отдельном хосте `pg.sweethome.local`; бэкенд (бот + API) — LXC на Proxmox.  
+**Источник истины:** PostgreSQL на отдельном хосте `postgres.example`; бэкенд (бот + API) — LXC на Proxmox.  
 **Telegram** и **Home Assistant** — клиенты одного REST/WebSocket API.
 
 ---
 
-## Инфраструктура пользователя
+## Инфраструктура (пример)
 
-Целевая среда деплоя (Eugene):
+Целевая среда деплоя:
 
 | Роль | Где | Доступ |
 |------|-----|--------|
-| **Proxmox (PVE)** | Хост виртуализации | `ssh pve.sweethome.local` |
-| **Home Assistant** | VM (HAOS) на Proxmox | Внешний UI: `https://makeinstall.duckdns.org` (через reverse proxy) |
-| **Home Assistant (внутри сети)** | та же VM HAOS | `ssh root@haos` |
-| **BuyMeLaterBot** | LXC `172.16.10.160` | API `http://172.16.10.160:8080` |
-| **PostgreSQL** | Общий хост для сервисов сети `172.16.10.0/24` | `pg.sweethome.local` (`172.16.10.150:5432`) |
+| **Proxmox (PVE)** | Хост виртуализации | `ssh proxmox.example` |
+| **Home Assistant** | VM (HAOS) на Proxmox | Внешний UI: `https://homeassistant.example` (через reverse proxy) |
+| **Home Assistant (внутри сети)** | та же VM HAOS | `ssh root@<ha-host>` |
+| **BuyMeLaterBot** | LXC `<bot-host>` | API `http://<bot-host>:8080` |
+| **PostgreSQL** | Общий хост для сервисов сети `<your-lan-subnet>` | `postgres.example` (`<postgres-host>:5432`) |
 
 **Схема размещения:**
 
 - Home Assistant — **VM с HAOS** под Proxmox (не LXC).
 - Бот — **отдельный LXC** на Proxmox; Docker Compose внутри LXC (только приложение, без БД).
-- PostgreSQL — **общий сервер** `pg.sweethome.local` для нескольких сервисов подсети `172.16.10.0/24`. BuyMeLaterBot использует **отдельную БД** `buymelater` и пользователя `buymelater` (изоляция от других сервисов).
-- HA обращается к API бота по **внутреннему IP LAN** (не через `makeinstall.duckdns.org`).
+- PostgreSQL — **общий сервер** `postgres.example` для нескольких сервисов подсети `<your-lan-subnet>`. BuyMeLaterBot использует **отдельную БД** `buymelater` и пользователя `buymelater` (изоляция от других сервисов).
+- HA обращается к API бота по **внутреннему IP LAN** (не через внешний URL HA).
 - Telegram — **polling** из LXC наружу; публичный URL для бота не нужен.
 - Порт API бота (8080) **не публикуется** через reverse proxy / DuckDNS.
 
@@ -34,11 +34,11 @@ Telegram-бот для семейных списков (покупки + дел�
 
 ```bash
 # Proxmox — создание/управление LXC
-ssh pve.sweethome.local
+ssh proxmox.example
 
 # Home Assistant — проверка доступности API бота из HAOS
-ssh root@haos
-curl -H "Authorization: Bearer $TOKEN" http://<LXC_IP>:8080/api/v1/scopes
+ssh root@<ha-host>
+curl -H "Authorization: Bearer $TOKEN" http://<bot-host>:8080/api/v1/scopes
 ```
 
 ---
@@ -58,7 +58,7 @@ flowchart TB
         Scheduler[APScheduler]
     end
 
-    subgraph pg [pg.sweethome.local]
+    subgraph pg [postgres.example]
         DB[(PostgreSQL)]
         DBBot[(buymelater DB)]
         DBOther[(другие БД сервисов)]
@@ -66,7 +66,7 @@ flowchart TB
         DB --> DBOther
     end
 
-    subgraph svcs [172.16.10.0/24]
+    subgraph svcs [<your-lan-subnet>]
         OtherSvc[Другие сервисы]
     end
 
@@ -96,12 +96,12 @@ flowchart TB
 flowchart LR
     Internet -->|443| RevProxy[Reverse Proxy]
     RevProxy --> HAOS[HAOS VM]
-    subgraph PVE[Proxmox pve.sweethome.local]
+    subgraph PVE[Proxmox proxmox.example]
         HAOS
         LXC[LXC buymelater-bot]
     end
-    PG[pg.sweethome.local 172.16.10.150]
-    subgraph LAN [172.16.10.0/24]
+    PG[postgres.example <postgres-host>]
+    subgraph LAN [<your-lan-subnet>]
         LXC
         PG
         Other[другие сервисы]
@@ -114,10 +114,10 @@ flowchart LR
 
 | Компонент | Адрес | Назначение |
 |-----------|-------|------------|
-| HA внешний | `https://makeinstall.duckdns.org` | UI, HACS, внешний доступ |
-| HA внутренний | `ssh root@haos` | Отладка, внутренняя сеть |
+| HA внешний | `https://homeassistant.example` | UI, HACS, внешний доступ |
+| HA внутренний | `ssh root@<ha-host>` | Отладка, внутренняя сеть |
 | Bot API | `http://buymelater.lan:8080` (пример) | Только LAN, без публикации в интернет |
-| PostgreSQL | `pg.sweethome.local` / `172.16.10.150:5432` | Общий инстанс; БД `buymelater` — только для этого бота |
+| PostgreSQL | `postgres.example` / `<postgres-host>:5432` | Общий инстанс; БД `buymelater` — только для этого бота |
 
 **Рекомендация: polling, не webhook.**  
 Бот в LXC не нуждается в публичном URL и TLS для Telegram. Polling проще, надёжнее за NAT/reverse proxy и не требует открывать порт для Telegram. Webhook имеет смысл только если позже появится публичный endpoint с валидным сертификатом.
@@ -543,8 +543,8 @@ Auth: `Authorization: Bearer <API_TOKEN>` (один токен на инстан
 |-----------|--------|-----------|
 | `todo.buymelater_semeja_pokupki` | Группа «Семья» — Покупки | Все |
 | `todo.buymelater_semeja_dela` | Группа «Семья» — Дела | Все |
-| `todo.buymelater_eugene_pokupki` | Личный Eugene — Покупки | Только привязанный HA user |
-| `todo.buymelater_eugene_dela` | Личный Eugene — Дела | Только привязанный HA user |
+| `todo.buymelater_user_pokupki` | Личный пользователь — Покупки | Только привязанный HA user |
+| `todo.buymelater_user_dela` | Личный пользователь — Дела | Только привязанный HA user |
 
 **Личные списки в HA:** через `entity_registry` + `user_ids` (HA 2024+) или условное отображение в panel по `hass.user.id` ↔ `ha_user_id`. Нативные `todo`-карточки Lovelace покажут все entity — для приватности личные entity можно не добавлять на общие дашборды; panel фильтрует по текущему пользователю.
 
@@ -575,16 +575,16 @@ Panel (Lit/web component):
 
 ## 7. Деплой на Proxmox LXC
 
-> См. также раздел [Инфраструктура пользователя](#инфраструктура-пользователя) — конкретные хосты и SSH-доступ Eugene.
+> См. также раздел [Инфраструктура (пример)](#инфраструктура-пример).
 
-### 7.0 PostgreSQL (pg.sweethome.local) — общий сервер
+### 7.0 PostgreSQL (postgres.example) — общий сервер
 
-`172.16.10.150` — **общий PostgreSQL** для сервисов подсети `172.16.10.0/24`. Каждый сервис получает **свою БД и своего пользователя**; таблицы между сервисами не шарятся.
+`<postgres-host>` — **общий PostgreSQL** для сервисов подсети `<your-lan-subnet>`. Каждый сервис получает **свою БД и своего пользователя**; таблицы между сервисами не шарятся.
 
 #### BuyMeLaterBot — создание БД и пользователя
 
 ```bash
-ssh pg.sweethome.local   # или ssh root@172.16.10.150
+ssh postgres.example   # или ssh root@<postgres-host>
 
 sudo -u postgres psql <<'SQL'
 CREATE USER buymelater WITH PASSWORD 'CHANGE_ME_STRONG';
@@ -603,19 +603,19 @@ SQL
 
 #### pg_hba.conf
 
-Доступ из внутренней подсети (все сервисы `172.16.10.0/24`):
+Доступ из внутренней подсети (все сервисы `<your-lan-subnet>`):
 
 ```
 # TYPE  DATABASE    USER          ADDRESS           METHOD
-host    buymelater  buymelater    172.16.10.0/24    scram-sha-256
-host    all         all           172.16.10.0/24    scram-sha-256
+host    buymelater  buymelater    <your-lan-subnet>    scram-sha-256
+host    all         all           <your-lan-subnet>    scram-sha-256
 ```
 
 Вторую строку можно заменить отдельными правилами per-database/per-user, если нужна более жёсткая сегментация. Пользователь `buymelater` всё равно видит только БД `buymelater` (нет прав на чужие БД).
 
 #### postgresql.conf
 
-- `listen_addresses = '*'` или IP интерфейса в `172.16.10.0/24`
+- `listen_addresses = '*'` или IP интерфейса в `<your-lan-subnet>`
 - При росте числа сервисов: `max_connections` с запасом; у каждого сервиса свой pool (SQLAlchemy `pool_size=5`)
 
 #### Миграции Alembic
@@ -626,19 +626,19 @@ host    all         all           172.16.10.0/24    scram-sha-256
 #### Проверка
 
 ```bash
-# с любого хоста в 172.16.10.0/24 (LXC бота, dev-машина)
-psql "postgresql://buymelater:PASSWORD@pg.sweethome.local:5432/buymelater" -c 'SELECT 1'
+# с любого хоста в <your-lan-subnet> (LXC бота, dev-машина)
+psql "postgresql://buymelater:PASSWORD@postgres.example:5432/buymelater" -c 'SELECT 1'
 ```
 
 #### Бэкапы (общий сервер)
 
 - `pg_dump buymelater` — только наша БД
-- `pg_dumpall` или поочерёдный dump всех БД — на уровне администрирования `pg.sweethome.local`
+- `pg_dumpall` или поочерёдный dump всех БД — на уровне администрирования `postgres.example`
 
 ### 7.1 Создание LXC
 
 ```bash
-# На pve.sweethome.local
+# На proxmox.example
 pct create 120 local:vztmpl/debian-12-standard_*.tar.zst \
   --hostname buymelater \
   --memory 512 --cores 1 --rootfs local-lvm:8 \
@@ -649,13 +649,13 @@ pct start 120
 pct enter 120
 ```
 
-Зафиксировать IP в подсети `172.16.10.0/24` (DHCP reservation или static), напр. `172.16.10.x` → DNS `buymelater.lan`.
+Зафиксировать IP в подсети `<your-lan-subnet>` (DHCP reservation или static), напр. `<bot-host>` → DNS `buymelater.lan`.
 
 ### 7.2 Установка в LXC
 
 ```bash
 apt update && apt install -y docker.io docker-compose-plugin
-git clone git@github.com:makeinstall77/BuyMeLaterBot.git /opt/buymelater
+git clone <your-repo-url> /opt/buymelater
 cd /opt/buymelater/deploy
 cp .env.example .env
 # Заполнить: TELEGRAM_BOT_TOKEN, API_TOKEN, DATABASE_URL
@@ -664,7 +664,7 @@ docker compose up -d
 
 `DATABASE_URL` в `.env`:
 ```
-DATABASE_URL=postgresql+asyncpg://buymelater:PASSWORD@pg.sweethome.local:5432/buymelater
+DATABASE_URL=postgresql+asyncpg://buymelater:PASSWORD@postgres.example:5432/buymelater
 ```
 
 ### 7.3 docker-compose.yml (скелет)
@@ -680,30 +680,30 @@ services:
       API_TOKEN: ${API_TOKEN}
     restart: unless-stopped
     extra_hosts:
-      - "pg.sweethome.local:172.16.10.150"  # если DNS не резолвится внутри контейнера
+      - "postgres.example:<postgres-host>"  # если DNS не резолвится внутри контейнера
 ```
 
 Один контейнер `app` запускает и FastAPI, и aiogram polling (через `asyncio.gather` в `__main__.py`).
 
 ### 7.4 Доступ из HAOS
 
-На HAOS VM бот доступен по внутреннему IP LXC (подсеть `172.16.10.0/24` или маршрутизируемая из HAOS):
+На HAOS VM бот доступен по внутреннему IP LXC (подсеть `<your-lan-subnet>` или маршрутизируемая из HAOS):
 ```
-http://172.16.10.x:8080
+http://<bot-host>:8080
 ```
 
 Проверка с HAOS:
 ```bash
-ssh root@haos
-curl -H "Authorization: Bearer $TOKEN" http://172.16.10.x:8080/api/v1/scopes
+ssh root@<ha-host>
+curl -H "Authorization: Bearer $TOKEN" http://<bot-host>:8080/api/v1/scopes
 ```
 
-Firewall: порт 8080 только из LAN (HAOS + админ), **не** публиковать через duckdns.
+Firewall: порт 8080 только из LAN (HAOS + админ), **не** публиковать через внешний reverse proxy.
 
 ### 7.5 Бэкапы
 
-- `pg_dump buymelater` на `pg.sweethome.local` по cron (только наша БД)
-- Полный бэкап инстанса PG — ответственность админа `pg.sweethome.local`
+- `pg_dump buymelater` на `postgres.example` по cron (только наша БД)
+- Полный бэкап инстанса PG — ответственность админа `postgres.example`
 - `.env` на LXC бота — вне git, бэкап отдельно
 
 ---
@@ -715,7 +715,7 @@ Firewall: порт 8080 только из LAN (HAOS + админ), **не** пу
 | Утечка Telegram token | `.env`, не в git; права 600 |
 | Несанкционированный доступ к API | Bearer token; API только в LAN |
 | Подмена при /link | Одноразовый код, TTL 10 мин |
-| Доступ к PostgreSQL | `pg_hba.conf`: `172.16.10.0/24`; отдельный user/DB `buymelater` — без доступа к чужим базам |
+| Доступ к PostgreSQL | `pg_hba.conf`: `<your-lan-subnet>`; отдельный user/DB `buymelater` — без доступа к чужим базам |
 | SQL injection | SQLAlchemy ORM, параметризованные запросы |
 | Спам в группе | NL-парсинг только при ключевых словах; опция «только для админов» (фаза 2) |
 
@@ -725,7 +725,7 @@ Firewall: порт 8080 только из LAN (HAOS + админ), **не** пу
 
 ### Фаза 1 — MVP (1–2 недели)
 
-- [ ] Docker + подключение к PostgreSQL (`pg.sweethome.local`) + SQLAlchemy models + Alembic
+- [ ] Docker + подключение к PostgreSQL (`postgres.example`) + SQLAlchemy models + Alembic
 - [ ] CRUD items, scopes (personal/group)
 - [ ] Telegram: /start, /shopping, /tasks, inline списки
 - [ ] Добавление/удаление/выполнение через кнопки
@@ -768,7 +768,7 @@ Firewall: порт 8080 только из LAN (HAOS + админ), **не** пу
 | Telegram | aiogram 3.x |
 | API | FastAPI + uvicorn |
 | ORM | SQLAlchemy 2.0 async |
-| DB | PostgreSQL 16 (общий: `pg.sweethome.local`, БД `buymelater`) |
+| DB | PostgreSQL 16 (общий: `postgres.example`, БД `buymelater`) |
 | Миграции | Alembic |
 | Scheduler | APScheduler 3.x |
 | NLP команды | yargy (ru, morph_pipeline) |
