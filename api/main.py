@@ -11,12 +11,23 @@ from core.crud import (
     get_list,
     get_lists_for_scope,
     list_items,
+    list_linked_users,
     list_scopes,
     update_item,
 )
 from core.db import get_session
+from core.link import create_link_code
 from core.models import ItemStatus, ScopeType
-from core.schemas import ItemCreate, ItemRead, ItemUpdate, ListRead, ScopeRead
+from core.schemas import (
+    ItemCreate,
+    ItemRead,
+    ItemUpdate,
+    LinkRequestCreate,
+    LinkRequestRead,
+    LinkedUserRead,
+    ListRead,
+    ScopeRead,
+)
 
 app = FastAPI(title="BuyMeLaterBot", version="0.1.0")
 
@@ -98,6 +109,23 @@ async def api_delete_item(
         raise HTTPException(status_code=404, detail="Item not found")
     await delete_item(session, item)
     await session.commit()
+
+
+@router.post("/link/request", response_model=LinkRequestRead)
+async def api_link_request(payload: LinkRequestCreate) -> LinkRequestRead:
+    from datetime import UTC, datetime
+
+    req = create_link_code(payload.ha_user_id)
+    ttl = max(1, int((req.expires_at - datetime.now(UTC)).total_seconds()))
+    return LinkRequestRead(code=req.code, expires_in=ttl)
+
+
+@router.get("/users/linked", response_model=list[LinkedUserRead])
+async def api_linked_users(
+    session: AsyncSession = Depends(get_session),
+) -> list[LinkedUserRead]:
+    users = await list_linked_users(session)
+    return [LinkedUserRead.model_validate(u) for u in users]
 
 
 app.include_router(router)

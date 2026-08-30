@@ -44,6 +44,28 @@ async def update_scope_timezone(session: AsyncSession, scope: Scope, timezone: s
     return scope
 
 
+async def link_ha_user(session: AsyncSession, user: TelegramUser, ha_user_id: str) -> TelegramUser:
+    user.ha_user_id = ha_user_id
+    await session.flush()
+    return user
+
+
+async def list_linked_users(session: AsyncSession) -> list[TelegramUser]:
+    result = await session.execute(
+        select(TelegramUser)
+        .where(TelegramUser.ha_user_id.is_not(None))
+        .order_by(TelegramUser.display_name)
+    )
+    return list(result.scalars().all())
+
+
+async def get_user_by_telegram_id(session: AsyncSession, telegram_user_id: int) -> TelegramUser | None:
+    result = await session.execute(
+        select(TelegramUser).where(TelegramUser.telegram_user_id == telegram_user_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def _create_default_lists(session: AsyncSession, scope: Scope) -> None:
     session.add_all(
         [

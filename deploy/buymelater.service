@@ -1,0 +1,17 @@
+[Unit]
+Description=BuyMeLaterBot (Telegram + REST API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=makeinstall
+Group=makeinstall
+WorkingDirectory=/opt/git/BuyMeLaterBot
+EnvironmentFile=/opt/git/BuyMeLaterBot/.env
+ExecStart=/opt/git/BuyMeLaterBot/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

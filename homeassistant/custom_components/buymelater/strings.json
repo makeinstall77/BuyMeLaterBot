@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BuyMeLater",
+        "description": "Подключение к BuyMeLaterBot API.",
+        "data": {
+          "url": "URL API",
+          "api_token": "API Token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось подключиться к API",
+      "invalid_auth": "Неверный API token"
+    },
+    "abort": {
+      "already_configured": "Интеграция уже настроена"
+    }
+  },
+  "options": {
+    "step": {
+      "link": {
+        "title": "Привязка Telegram",
+        "description": "Отправьте боту в личке: /link {code}\n\nПосле привязки перезагрузите интеграцию, чтобы появились личные списки.",
+        "data": {}
+      }
+    }
+  }
+}

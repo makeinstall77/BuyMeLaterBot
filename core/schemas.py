@@ -95,3 +95,21 @@ class ParsedReminder(BaseModel):
     is_recurring: bool = False
     recurrence: RecurrencePreset | None = None
     raw_text: str = ""
+
+
+class LinkRequestCreate(BaseModel):
+    ha_user_id: str = Field(min_length=1, max_length=64)
+
+
+class LinkRequestRead(BaseModel):
+    code: str
+    expires_in: int
+
+
+class LinkedUserRead(BaseModel):
+    id: UUID
+    telegram_user_id: int
+    username: str | None
+    display_name: str
+    ha_user_id: str
+    timezone: str
