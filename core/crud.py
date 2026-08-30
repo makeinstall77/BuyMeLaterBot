@@ -204,16 +204,12 @@ async def update_item(session: AsyncSession, item: Item, data: ItemUpdate) -> It
     elif data.status == ItemStatus.active:
         item.completed_at = None
 
-    if data.notifications_enabled is False:
+    if not item.notifications_enabled or item.due_at is None:
         item.next_notify_at = None
-    elif data.notifications_enabled and item.due_at:
+    elif item.is_recurring and item.rrule:
+        item.next_notify_at = initial_next_notify(item.due_at, item.rrule)
+    else:
         item.next_notify_at = item.due_at
-
-    if "due_at" in fields and data.notifications_enabled is None:
-        if item.due_at is None:
-            item.next_notify_at = None
-        elif item.notifications_enabled:
-            item.next_notify_at = item.due_at
 
     await session.flush()
     queue_ws_event(session, "item_updated", item_ws_payload(item))

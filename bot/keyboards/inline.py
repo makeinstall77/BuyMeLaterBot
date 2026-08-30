@@ -31,6 +31,36 @@ def list_type_kb() -> InlineKeyboardMarkup:
     )
 
 
+def list_back_kb(list_type: ListType) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« К списку", callback_data=f"list:view:{list_type.value}")],
+        ]
+    )
+
+
+def empty_list_kb(list_type: ListType) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="➕ Добавить", callback_data=f"list:add:{list_type.value}"),
+                InlineKeyboardButton(text="« Меню", callback_data="menu:home"),
+            ],
+        ]
+    )
+
+
+def list_footer_kb(list_type: ListType) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="➕ Добавить", callback_data=f"list:add:{list_type.value}"),
+                InlineKeyboardButton(text="« Меню", callback_data="menu:home"),
+            ],
+        ]
+    )
+
+
 def item_actions_kb(item: Item, list_type: ListType) -> InlineKeyboardMarkup:
     notify_label = "🔔 Выкл" if item.notifications_enabled else "🔔 Вкл"
     return InlineKeyboardMarkup(
@@ -120,6 +150,109 @@ def recurrence_kb(item_id) -> InlineKeyboardMarkup:
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def add_notify_kb(item_id) -> InlineKeyboardMarkup:
+    iid = str(item_id)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔔 Включить", callback_data=f"add:notify:yes:{iid}"),
+                InlineKeyboardButton(text="Без напоминания", callback_data=f"add:notify:no:{iid}"),
+            ]
+        ]
+    )
+
+
+def add_recurrence_kb(item_id) -> InlineKeyboardMarkup:
+    iid = str(item_id)
+    presets = [
+        (RecurrencePreset.daily, "Ежедневно"),
+        (RecurrencePreset.weekdays, "По будням"),
+        (RecurrencePreset.weekly, "Еженедельно"),
+        (RecurrencePreset.monthly, "Ежемесячно"),
+    ]
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=f"add:recur:{iid}:{preset.value}")]
+        for preset, label in presets
+    ]
+    rows.append(
+        [
+            InlineKeyboardButton(text="Разово", callback_data=f"add:recur:{iid}:once"),
+        ]
+    )
+    rows.append([InlineKeyboardButton(text="« Назад", callback_data=f"add:asknotify:{iid}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def add_weekday_kb(item_id) -> InlineKeyboardMarkup:
+    iid = str(item_id)
+    labels = [
+        ("Пн", "MO"),
+        ("Вт", "TU"),
+        ("Ср", "WE"),
+        ("Чт", "TH"),
+        ("Пт", "FR"),
+        ("Сб", "SA"),
+        ("Вс", "SU"),
+    ]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=label, callback_data=f"add:wday:{iid}:{code}")
+                for label, code in labels
+            ],
+            [InlineKeyboardButton(text="« Назад", callback_data=f"add:period:{iid}")],
+        ]
+    )
+
+
+def add_monthday_kb(item_id) -> InlineKeyboardMarkup:
+    iid = str(item_id)
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for day in range(1, 32):
+        row.append(InlineKeyboardButton(text=str(day), callback_data=f"add:mday:{iid}:{day}"))
+        if len(row) == 7:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="« Назад", callback_data=f"add:period:{iid}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def add_once_date_kb(item_id) -> InlineKeyboardMarkup:
+    iid = str(item_id)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Сегодня", callback_data=f"add:ondate:{iid}:today"),
+                InlineKeyboardButton(text="Завтра", callback_data=f"add:ondate:{iid}:tomorrow"),
+            ],
+            [InlineKeyboardButton(text="✏️ Ввести дату", callback_data=f"add:ondate:{iid}:manual")],
+            [InlineKeyboardButton(text="« Назад", callback_data=f"add:period:{iid}")],
+        ]
+    )
+
+
+def add_time_kb(item_id) -> InlineKeyboardMarkup:
+    iid = str(item_id)
+    times = [("09:00", "0900"), ("12:00", "1200"), ("18:00", "1800"), ("21:00", "2100")]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=label, callback_data=f"add:time:{iid}:{code}")
+                for label, code in times[:2]
+            ],
+            [
+                InlineKeyboardButton(text=label, callback_data=f"add:time:{iid}:{code}")
+                for label, code in times[2:]
+            ],
+            [InlineKeyboardButton(text="✏️ Ввести время", callback_data=f"add:timetext:{iid}")],
+            [InlineKeyboardButton(text="« Назад", callback_data=f"add:period:{iid}")],
+        ]
+    )
 
 
 def confirm_parsed_kb(list_type: ListType) -> InlineKeyboardMarkup:

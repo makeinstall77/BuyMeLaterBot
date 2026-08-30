@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from core.models import ItemStatus, ListType, ScopeType
 
@@ -48,6 +48,13 @@ class ItemRead(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def recurrence_label(self) -> str | None:
+        from core.recurrence import format_rrule_label
+
+        return format_rrule_label(self.rrule, self.is_recurring)
 
 
 class ItemCreate(BaseModel):

@@ -10,6 +10,7 @@ from bot.recurrence_edit import (
     clear_recurrence,
     recurrence_changed_message,
 )
+from bot.ui import show_screen
 from bot.views import format_item_card
 from core.crud import get_item
 from core.models import Scope
@@ -27,10 +28,7 @@ async def cb_recur_menu(callback: CallbackQuery, session: AsyncSession, scope: S
         return
     list_type = item.list.list_type
     text = format_item_card(item, list_type, scope.timezone)
-    await callback.message.edit_text(
-        f"{text}\n\nВыберите периодичность:",
-        reply_markup=recurrence_kb(item.id),
-    )
+    await show_screen(callback, f"{text}\n\nВыберите периодичность:", recurrence_kb(item.id))
     await callback.answer()
 
 
@@ -56,9 +54,10 @@ async def cb_recur_set(callback: CallbackQuery, session: AsyncSession, scope: Sc
 
     list_type = item.list.list_type
     text = format_item_card(item, list_type, scope.timezone)
-    await callback.message.edit_text(
+    await show_screen(
+        callback,
         f"{recurrence_changed_message(item, scope.timezone)}\n\n{text}",
-        reply_markup=item_actions_kb(item, list_type),
+        item_actions_kb(item, list_type),
     )
     await callback.answer()
 
@@ -74,8 +73,9 @@ async def cb_recur_clear(callback: CallbackQuery, session: AsyncSession, scope: 
     item = await clear_recurrence(session, item)
     list_type = item.list.list_type
     text = format_item_card(item, list_type, scope.timezone)
-    await callback.message.edit_text(
+    await show_screen(
+        callback,
         f"{recurrence_changed_message(item, scope.timezone)}\n\n{text}",
-        reply_markup=item_actions_kb(item, list_type),
+        item_actions_kb(item, list_type),
     )
     await callback.answer("Периодичность выключена")

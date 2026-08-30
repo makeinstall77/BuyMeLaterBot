@@ -6,11 +6,33 @@ from core.nlp.datetime_extract import format_due
 from core.recurrence import format_recurrence
 
 
-async def render_list_message(
+def add_from_list_prompt(list_type: ListType) -> str:
+    label = "покупки" if list_type == ListType.shopping else "дела"
+    return (
+        f"Список пуст.\n\n"
+        f"Напишите название для «{label.capitalize()}».\n\n"
+        "Пример: «Время поливать орхидеи»"
+    )
+
+
+def add_title_prompt(list_type: ListType) -> str:
+    label = "покупки" if list_type == ListType.shopping else "дела"
+    return (
+        f"Напишите название для списка «{label.capitalize()}».\n\n"
+        "Пример: «Время поливать орхидеи»"
+    )
+
+
+async def open_list_screen(
     session: AsyncSession,
     scope: Scope,
     list_type: ListType,
+    user_id: int,
+    *,
+    auto_add_if_empty: bool = True,
 ) -> tuple[str, InlineKeyboardMarkup | None]:
+    from bot.keyboards.inline import empty_list_kb, list_back_kb
+    from bot.state import set_pending_add
     from core.crud import get_list_by_type, list_items
 
     db_list = await get_list_by_type(session, scope.id, list_type)
@@ -22,11 +44,32 @@ async def render_list_message(
     title = f"{icon} {db_list.name} — {scope.title}"
 
     if not items:
-        text = f"{title}\n\nПусто. Напишите, например:\n«напомни купить хлеб в 17:00»"
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="« Меню", callback_data="menu:home")]]
-        )
-        return text, kb
+        if auto_add_if_empty:
+            set_pending_add(user_id, list_type)
+            return add_from_list_prompt(list_type), list_back_kb(list_type)
+        return f"{title}\n\nПусто.", empty_list_kb(list_type)
+
+    return await render_list_message(session, scope, list_type)
+
+
+async def render_list_message(
+    session: AsyncSession,
+    scope: Scope,
+    list_type: ListType,
+) -> tuple[str, InlineKeyboardMarkup | None]:
+    from bot.keyboards.inline import empty_list_kb, list_footer_kb
+    from core.crud import get_list_by_type, list_items
+
+    db_list = await get_list_by_type(session, scope.id, list_type)
+    if db_list is None:
+        return "Список не найден.", None
+
+    items = await list_items(session, db_list.id)
+    icon = "🛒" if list_type == ListType.shopping else "📋"
+    title = f"{icon} {db_list.name} — {scope.title}"
+
+    if not items:
+        return f"{title}\n\nПусто.", empty_list_kb(list_type)
 
     lines = [title, ""]
     buttons: list[list[InlineKeyboardButton]] = []
@@ -43,7 +86,7 @@ async def render_list_message(
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text="« Меню", callback_data="menu:home")])
+    buttons.extend(list_footer_kb(list_type).inline_keyboard)
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

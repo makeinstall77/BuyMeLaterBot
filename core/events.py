@@ -11,6 +11,9 @@ def queue_ws_event(session: AsyncSession, event: str, payload: dict[str, Any]) -
     session.info.setdefault(WS_EVENTS_KEY, []).append((event, payload))
 
 
+from core.recurrence import format_rrule_label
+
+
 def item_ws_payload(item: Item, event: str | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": str(item.id),
@@ -20,6 +23,7 @@ def item_ws_payload(item: Item, event: str | None = None) -> dict[str, Any]:
         "due_at": item.due_at.isoformat() if item.due_at else None,
         "is_recurring": item.is_recurring,
         "rrule": item.rrule,
+        "recurrence_label": format_rrule_label(item.rrule, item.is_recurring),
         "notifications_enabled": item.notifications_enabled,
     }
     if item.list is not None:

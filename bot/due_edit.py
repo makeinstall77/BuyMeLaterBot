@@ -42,8 +42,10 @@ async def apply_due_at(
 ) -> Item:
     if due_at is None:
         notifications_enabled = False
-    elif enable_notify and not notifications_enabled:
+    elif enable_notify:
         notifications_enabled = True
+    else:
+        notifications_enabled = item.notifications_enabled
 
     updates: dict = {
         "due_at": due_at,

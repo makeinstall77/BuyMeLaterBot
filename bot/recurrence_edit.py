@@ -15,11 +15,19 @@ async def apply_recurrence_preset(
     session: AsyncSession,
     item: Item,
     preset: RecurrencePreset,
+    *,
+    byday: str | None = None,
+    monthday: int | None = None,
 ) -> tuple[Item | None, str | None]:
     if item.due_at is None:
         return None, "Сначала укажите дату (кнопка «📅 Дата»)"
 
-    rrule = rrule_for_preset(preset, item.due_at)
+    rrule = rrule_for_preset(
+        preset,
+        item.due_at,
+        byday=byday,
+        monthday=monthday,
+    )
     next_at = initial_next_notify(item.due_at, rrule)
 
     item = await update_item(
