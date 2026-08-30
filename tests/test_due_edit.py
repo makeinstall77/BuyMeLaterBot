@@ -1,7 +1,5 @@
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import pytest
 from freezegun import freeze_time
 
 from bot.due_edit import preset_due

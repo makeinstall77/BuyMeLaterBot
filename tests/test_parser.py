@@ -1,7 +1,5 @@
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import pytest
 from freezegun import freeze_time
 
 from core.models import ListType

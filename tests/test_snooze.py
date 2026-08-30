@@ -1,4 +1,3 @@
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from freezegun import freeze_time

@@ -1,12 +1,19 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import verify_api_token
 from api.websocket import ws_manager
 from core.config import settings
-from core.events import WS_EVENTS_KEY
 from core.crud import (
     create_item,
     delete_item,
@@ -19,15 +26,16 @@ from core.crud import (
     update_item,
 )
 from core.db import get_session
+from core.events import WS_EVENTS_KEY
 from core.link import create_link_code
 from core.models import ItemStatus, ScopeType
 from core.schemas import (
     ItemCreate,
     ItemRead,
     ItemUpdate,
+    LinkedUserRead,
     LinkRequestCreate,
     LinkRequestRead,
-    LinkedUserRead,
     ListRead,
     ScopeRead,
 )

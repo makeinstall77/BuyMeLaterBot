@@ -1,6 +1,16 @@
 from aiogram import Dispatcher
 
-from bot.handlers import callbacks, commands, due, groups, link, messages, recurrence, settings, snooze
+from bot.handlers import (
+    callbacks,
+    commands,
+    due,
+    groups,
+    link,
+    messages,
+    recurrence,
+    settings,
+    snooze,
+)
 from bot.middlewares.db import DbSessionMiddleware, ScopeMiddleware
 
 

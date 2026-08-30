@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.due_edit import apply_due_from_text, due_changed_message
 from bot.keyboards.inline import confirm_parsed_kb, item_actions_kb
-from bot.state import get_pending_due_edit, pop_pending_due_edit, set_pending_due_edit, store_pending_parsed
+from bot.state import (
+    get_pending_due_edit,
+    pop_pending_due_edit,
+    set_pending_due_edit,
+    store_pending_parsed,
+)
 from bot.views import format_item_card
 from core.crud import get_item
 from core.models import Scope, TelegramUser

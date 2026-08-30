@@ -43,3 +43,10 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"api/websocket.py" = ["BLE001"]
+"core/nlp/grammar.py" = ["BLE001"]

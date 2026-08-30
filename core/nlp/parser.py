@@ -4,7 +4,7 @@ from core.models import ListType
 from core.nlp.datetime_extract import extract_datetime
 from core.nlp.grammar import get_reminder_parser, has_reminder_trigger
 from core.recurrence import rrule_for_preset
-from core.schemas import ParsedReminder, RRULE_BY_PRESET, RecurrencePreset
+from core.schemas import RRULE_BY_PRESET, ParsedReminder, RecurrencePreset
 
 
 def _detect_recurrence(text: str) -> RecurrencePreset | None:
@@ -22,13 +22,13 @@ def _detect_recurrence(text: str) -> RecurrencePreset | None:
 
 def _strip_recurrence_phrases(text: str) -> str:
     for phrase in ("каждый день", "по будням", "каждую неделю", "каждый месяц"):
-        text = re.sub(re.escape(phrase), " ", text, flags=re.I)
+        text = re.sub(re.escape(phrase), " ", text, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", text).strip()
 
 
 def _clean_title(text: str) -> str:
-    text = re.sub(r"^(напомни|напоминание|добавь|не забудь)\s*", "", text, flags=re.I)
-    text = re.sub(r"^(купить|купи)\s*", "", text, flags=re.I)
+    text = re.sub(r"^(напомни|напоминание|добавь|не забудь)\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(купить|купи)\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip(" ,.-")
     return text
 
